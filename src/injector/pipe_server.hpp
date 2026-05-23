@@ -45,7 +45,7 @@ namespace Injector {
         void WaitForClient();
         void SendConfig(bool verbose, bool fingerprint, const std::filesystem::path& output);
         void ProcessMessages(bool verbose);
-
+        void ProcessMessagesWithConfirmation(bool verbose, bool& success, std::string& errorMessage);
         // Getters for data extraction
         std::wstring GetName() const { return m_pipeName; }
         ExtractionStats GetStats() const { return m_stats; }
