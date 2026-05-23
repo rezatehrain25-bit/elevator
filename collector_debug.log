@@ -1,0 +1,38 @@
+Collector started at 520827906
+Verbose enabled
+Target (positional): all
+Console created
+Syscall initialization successful
+Output directory created: C:\Users\user\Desktop\job\C#\Stealer\EncryptedDataCollector\output
+FindAll returned 3 browsers
+Processing browser: Brave at C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe
+Process created with PID: 17456
+Pipe created: \\.\pipe\chromium.ipc.8873.9947
+Payload injected (remote thread suspended)
+About to resume payload thread
+Payload thread resumed, waiting for connection
+Payload thread resumed
+Configuration sent to payload
+Message processing completed
+Process exited cleanly
+Processing browser: Chrome at C:\Program Files\Google\Chrome\Application\chrome.exe
+Process created with PID: 2124
+Pipe created: \\.\pipe\chrome.sync.11428.9947.81D0
+Payload injected (remote thread suspended)
+About to resume payload thread
+Payload thread resumed, waiting for connection
+Payload thread resumed
+Configuration sent to payload
+Message processing completed
+Process exited cleanly
+Processing browser: Edge at C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
+Process created with PID: 10832
+Pipe created: \\.\pipe\msedge.sync.20769.9947
+Payload injected (remote thread suspended)
+About to resume payload thread
+Payload thread resumed, waiting for connection
+Payload thread resumed
+Configuration sent to payload
+Message processing completed
+Process exited cleanly
+Collector finished successfully
