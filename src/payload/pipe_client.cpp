@@ -13,6 +13,9 @@ namespace Payload {
         if (IsValid()) {
             Log("__DLL_PIPE_COMPLETION_SIGNAL__");
             FlushFileBuffers(m_hPipe);
+            // Critical: Wait for pipe to be read by server before closing
+            // This prevents messages from being lost when DLL exits
+            Sleep(1000);
             CloseHandle(m_hPipe);
         }
     }
@@ -21,6 +24,7 @@ namespace Payload {
         if (IsValid()) {
             DWORD written = 0;
             WriteFile(m_hPipe, msg.c_str(), static_cast<DWORD>(msg.length() + 1), &written, nullptr);
+            FlushFileBuffers(m_hPipe);
         }
     }
 
@@ -34,7 +38,7 @@ namespace Payload {
 
     PipeClient::Config PipeClient::ReadConfig() {
         Config config{};
-        char buffer[MAX_PATH + 1] = {0};
+        char buffer[MAX_PATH + 1] = { 0 };
         DWORD read = 0;
 
         if (ReadFile(m_hPipe, buffer, sizeof(buffer) - 1, &read, nullptr)) {
