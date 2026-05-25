@@ -296,6 +296,7 @@ static DWORD DoCollectorWork(LPCWSTR pipeName, HMODULE hModule) {
                 std::string errMsg = "Cannot create directory: " + Core::ToUtf8(subdir);
                 pipe.Log("FILE_WRITE_FAIL:" + errMsg);
                 LogDebug(errMsg.c_str());
+                Sleep(500);  // Give pipe time to process
                 CoUninitialize();
                 FreeLibraryAndExitThread(hModule, 1);
                 return 1;
@@ -305,6 +306,7 @@ static DWORD DoCollectorWork(LPCWSTR pipeName, HMODULE hModule) {
             std::string errMsg = "Cannot create output directory: " + Core::ToUtf8(wideOutputDir);
             pipe.Log("FILE_WRITE_FAIL:" + errMsg);
             LogDebug(errMsg.c_str());
+            Sleep(500);  // Give pipe time to process
             CoUninitialize();
             FreeLibraryAndExitThread(hModule, 1);
             return 1;
@@ -319,6 +321,7 @@ static DWORD DoCollectorWork(LPCWSTR pipeName, HMODULE hModule) {
         std::string errMsg = "CreateFileW failed, error " + std::to_string(err);
         pipe.Log("FILE_WRITE_FAIL:" + errMsg);
         LogDebug(errMsg.c_str());
+        Sleep(500);  // Give pipe time to process
         CoUninitialize();
         FreeLibraryAndExitThread(hModule, 1);
         return 1;
@@ -332,6 +335,7 @@ static DWORD DoCollectorWork(LPCWSTR pipeName, HMODULE hModule) {
         std::string errMsg = "WriteFile failed: wrote " + std::to_string(written) + " of " + std::to_string(jsonStr.size());
         pipe.Log("FILE_WRITE_FAIL:" + errMsg);
         LogDebug(errMsg.c_str());
+        Sleep(500);  // Give pipe time to process
         CoUninitialize();
         FreeLibraryAndExitThread(hModule, 1);
         return 1;
@@ -342,16 +346,24 @@ static DWORD DoCollectorWork(LPCWSTR pipeName, HMODULE hModule) {
         std::string errMsg = "File missing or empty after write";
         pipe.Log("FILE_WRITE_FAIL:" + errMsg);
         LogDebug(errMsg.c_str());
+        Sleep(500);  // Give pipe time to process
         CoUninitialize();
         FreeLibraryAndExitThread(hModule, 1);
         return 1;
     }
 
-    pipe.Log("FILE_WRITE_OK:" + jsonPath.string());
+    // Send success confirmation and wait for it to be delivered
+    std::string successMsg = "FILE_WRITE_OK:" + jsonPath.string();
+    pipe.Log(successMsg);
     LogDebug(("[+] Successfully wrote " + jsonPath.string()).c_str());
 
+    // Critical: Give pipe sufficient time to send the message before exiting
+    Sleep(1000);
+
     pipe.Log("INFO: Collection finished successfully.");
+
     CoUninitialize();
+    Sleep(500);  // Final delay to ensure messages are flushed
     FreeLibraryAndExitThread(hModule, 0);
     return 0;
 }
