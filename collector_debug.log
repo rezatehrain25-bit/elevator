@@ -1,4 +1,4 @@
-Collector started at 520827906
+Collector started at 686464546
 Verbose enabled
 Target (positional): all
 Console created
@@ -6,8 +6,8 @@ Syscall initialization successful
 Output directory created: C:\Users\user\Desktop\job\C#\Stealer\EncryptedDataCollector\output
 FindAll returned 3 browsers
 Processing browser: Brave at C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe
-Process created with PID: 17456
-Pipe created: \\.\pipe\chromium.ipc.8873.9947
+Process created with PID: 23268
+Pipe created: \\.\pipe\chromium.ipc.56978.8638
 Payload injected (remote thread suspended)
 About to resume payload thread
 Payload thread resumed, waiting for connection
@@ -15,9 +15,11 @@ Payload thread resumed
 Configuration sent to payload
 Message processing completed
 Process exited cleanly
+ERROR: encrypted.json not found or empty after browser process exit
+Check %temp%\collector_payload_debug.log for details
 Processing browser: Chrome at C:\Program Files\Google\Chrome\Application\chrome.exe
-Process created with PID: 2124
-Pipe created: \\.\pipe\chrome.sync.11428.9947.81D0
+Process created with PID: 19872
+Pipe created: \\.\pipe\mojo.59587.8638.B954.chrome
 Payload injected (remote thread suspended)
 About to resume payload thread
 Payload thread resumed, waiting for connection
@@ -25,9 +27,11 @@ Payload thread resumed
 Configuration sent to payload
 Message processing completed
 Process exited cleanly
+ERROR: encrypted.json not found or empty after browser process exit
+Check %temp%\collector_payload_debug.log for details
 Processing browser: Edge at C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
-Process created with PID: 10832
-Pipe created: \\.\pipe\msedge.sync.20769.9947
+Process created with PID: 4820
+Pipe created: \\.\pipe\msedge.sync.61400.8638
 Payload injected (remote thread suspended)
 About to resume payload thread
 Payload thread resumed, waiting for connection
@@ -35,4 +39,6 @@ Payload thread resumed
 Configuration sent to payload
 Message processing completed
 Process exited cleanly
+ERROR: encrypted.json not found or empty after browser process exit
+Check %temp%\collector_payload_debug.log for details
 Collector finished successfully
